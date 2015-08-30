@@ -17,7 +17,7 @@
  *      
  * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#define PORT 80
+#define PORT 8080
 #define SRV_NAME "NanoWeb"
 #define SRV_VER "0.0.1"
 #define WEBROOT "./webroot"
@@ -29,6 +29,8 @@
 
 #define HTTP_NOT_FOUND "HTTP/1.0 404 NOT FOUND\r\n"
 #define HTTP_OK "HTTP/1.0 200 OK\r\n"
+#define HTTP_TYPE_HTML "content-type: text/html\r\n"
+#define HTTP_TYPE_CSS "content-type: text/css\r\n"
 #define HTTP_SRV_VER "Server: NanoWeb webserver\r\n\r\n"
 
 std::ofstream SRV_LOG_FILE;
@@ -147,6 +149,12 @@ void handle_con(int sock_con, struct sockaddr_in *client_addr)
                 write_srv_log(SRV_LOG_FILE, "200 OK\n");
                 
                 send(sock_con, HTTP_OK, 17, 0);
+
+                if(res_file.find(".css") != std::string::npos)
+                    send(sock_con, HTTP_TYPE_CSS, 24, 0);
+                else if(res_file.find(".html") != std::string::npos)
+                    send(sock_con, HTTP_TYPE_HTML, 25, 0);
+
                 send(sock_con, HTTP_SRV_VER, 29, 0);
                 
                 std::string line;
