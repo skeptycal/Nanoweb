@@ -1,8 +1,30 @@
 body {
-    background-color: #000000;
+    background-color: #202020;
     color: #C1C1C1;
+    text-shadow: 2px 2px #050505;
+}
+
+#container {
+    height: 100%;
+    width: 100%;
+}
+
+#container p {
+    color: #C1C1C1;
+    position: absolute;
+    margin: 0;
+    top: 50%;
+    left: 50%;
+    margin-right: -50%;
+    transform: translate(-50%,-50%);
 }
 
 h1 {
+    font-size: 20px;
     color: #4A6788;
+}
+
+.title {
+    padding-top: 100px;
+    text-align: center;
 }
