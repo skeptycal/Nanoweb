@@ -5,6 +5,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #define PORT 8080
 #define SRV_NAME "NanoWeb"
@@ -22,6 +24,7 @@
 #define HTTP_TYPE_CSS "content-type: text/css\r\n"
 #define HTTP_SRV_VER "Server: NanoWeb webserver\r\n\r\n"
 
+static std::string Webroot;
 static int sockfd;
 static std::ofstream SRV_LOG_FILE;
 
@@ -29,7 +32,7 @@ void socket_setup();
 void handle_incoming_connections();
 void open_log_file();
 void strip_input(std::string &res_file);
-void send_file(int sock_con, std::string &res_file, std::ifstream &req_file);
+void send_file(int sock_con, std::string &res_file, FILE *file);
 void send_file_not_found(int sock_con);
 void handle_request(int, struct sockaddr_in*);
 void read_line(const int&, char *, int);
@@ -38,7 +41,7 @@ void write_srv_log(std::ostream &, const std::string&);
 
 void write_srv_log(std::ostream &out, const std::string &msg)
 {
-    out << msg;   
+    out << msg;
     out.flush();
 }
 
@@ -62,7 +65,7 @@ void read_line(const int &sock_con, char *request, int max_len)
 {
     char *ptr = request;
     int eol_match = 0;
-    while(recv(sock_con, ptr++, 1, 0) == 1 && --max_len > 0) { 
+    while(recv(sock_con, ptr++, 1, 0) == 1 && --max_len > 0) {
         if(*(ptr-1) == "\r\n"[eol_match]) {
             eol_match++;
             if(eol_match == 2) {
@@ -84,7 +87,7 @@ void open_log_file()
     write_srv_log(SRV_LOG_FILE, std::string(SRV_NAME) + " " + std::string(SRV_VER) + " is now running..\n");
 }
 
-void send_file(int sock_con, std::string &res_file, std::ifstream &req_file)
+void send_file(int sock_con, std::string &res_file, FILE *file)
 {
     write_srv_log(SRV_LOG_FILE, "200 OK\n");
     send(sock_con, HTTP_OK, 17, 0);
@@ -96,9 +99,13 @@ void send_file(int sock_con, std::string &res_file, std::ifstream &req_file)
 
     send(sock_con, HTTP_SRV_VER, 29, 0);
 
-    std::string line;
-    while(std::getline(req_file, line))
-        send(sock_con, line.c_str(), line.size(), 0);
+    fseek(file, 0, SEEK_END);
+    size_t length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    char buffer[length];
+    fread(buffer, length, 1, file);
+
+    send(sock_con, buffer, length, 0);
     send(sock_con, "\r\n", 2, 0);
 }
 
@@ -106,15 +113,15 @@ void send_file_not_found(int sock_con)
 {
     write_srv_log(SRV_LOG_FILE, "404 Not Found\n");
     send(sock_con, HTTP_NOT_FOUND, 24, 0);
-    send(sock_con, HTTP_SRV_VER, 29, 0); 
+    send(sock_con, HTTP_SRV_VER, 29, 0);
 
-    std::ifstream err_file(std::string(WEBROOT) + "/" + FILE_NOT_FOUND);
+    std::ifstream err_file(Webroot + "/" + FILE_NOT_FOUND);
     if(err_file) {
         std::string line;
         while(std::getline(err_file, line))
             send(sock_con, line.c_str(), line.size(), 0);
     } else {
-        send(sock_con, FNF_NOT_FOUND, 72, 0); 
+        send(sock_con, FNF_NOT_FOUND, 72, 0);
     }
     send(sock_con, "\r\n", 2, 0);
     err_file.close();
@@ -125,11 +132,11 @@ void handle_request(int sock_con, struct sockaddr_in *client_addr)
     char request[512], *ptr;
     read_line(sock_con, request, 512);
 
-    write_srv_log(SRV_LOG_FILE, "Request from " + std::string(inet_ntoa(client_addr->sin_addr)) + 
+    write_srv_log(SRV_LOG_FILE, "Request from " + std::string(inet_ntoa(client_addr->sin_addr)) +
             ":" + std::to_string(ntohs(client_addr->sin_port)) + " '" + std::string(request) + "'\n");
 
     ptr = std::strstr(request, " HTTP/");
-    if(ptr != NULL) 
+    if(ptr != NULL)
     {
         *ptr = 0;
         ptr = NULL;
@@ -138,31 +145,34 @@ void handle_request(int sock_con, struct sockaddr_in *client_addr)
         if(std::strncmp(request, "HEAD ", 5) == 0)
             ptr = request+5;
 
-        if(ptr != NULL) 
+        if(ptr != NULL)
         {
             std::string res_file(ptr);
             if(res_file[res_file.size()-1] == '/')
                 res_file += INDEX_FILE;
 
             strip_input(res_file);
-            res_file = WEBROOT + res_file;
+            res_file = Webroot + res_file;
 
             write_srv_log(SRV_LOG_FILE, "Opening '" + res_file + "' ");
-            std::ifstream req_file(res_file);
-
+            FILE *req_file = fopen(res_file.c_str(), "rb");
             if(req_file)
+            {
                 send_file(sock_con, res_file, req_file);
+                fclose(req_file);
+            }
             else
-                send_file_not_found(sock_con);    
-            req_file.close();
-        } else 
+            {
+                send_file_not_found(sock_con);
+            }
+        } else
             write_srv_log(SRV_LOG_FILE, "UNKNOWN REQUEST\n");
-    } 
+    }
 }
 
 void handle_incoming_connections()
 {
-    int sock_con;    
+    int sock_con;
     struct sockaddr_in client_addr;
     socklen_t sin_size = sizeof(struct sockaddr_in);
 
@@ -180,7 +190,7 @@ void handle_incoming_connections()
 void socket_setup()
 {
     int _true = 1;
-    struct sockaddr_in host_addr; 
+    struct sockaddr_in host_addr;
 
     if((sockfd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
         fatal("Failed to open socket.");
@@ -204,7 +214,16 @@ int main(int argc, char *argv[])
 {
     socket_setup();
     open_log_file();
+
+    if(argc == 2)
+    {
+        Webroot = argv[1];
+    }
+    else
+    {
+        Webroot = "./webroot";
+    }
+
     handle_incoming_connections();
     return 0;
 }
-
