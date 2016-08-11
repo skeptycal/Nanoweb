@@ -181,6 +181,7 @@ void handle_incoming_connections()
         {
             handle_request(sock_con, &client_addr);
             shutdown(sock_con, SHUT_RDWR);
+            close(sock_con);
         }
     }
 }
