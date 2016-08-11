@@ -106,7 +106,6 @@ void send_file(int sock_con, std::string &res_file, FILE *file)
     fread(buffer, length, 1, file);
 
     send(sock_con, buffer, length, 0);
-    send(sock_con, "\r\n", 2, 0);
 }
 
 void send_file_not_found(int sock_con)
@@ -123,7 +122,6 @@ void send_file_not_found(int sock_con)
     } else {
         send(sock_con, FNF_NOT_FOUND, 72, 0);
     }
-    send(sock_con, "\r\n", 2, 0);
     err_file.close();
 }
 
